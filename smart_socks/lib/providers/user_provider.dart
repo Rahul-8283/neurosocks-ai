@@ -19,6 +19,7 @@ class UserProvider extends ChangeNotifier {
   material.ThemeMode _themeMode = material.ThemeMode.system;
   bool _notificationsEnabled = true;
   bool _onboardingComplete = false;
+  bool _isPinSet = false; // Track if user has set a PIN
 
   // Device pairing
   String? _pairedDeviceId;
@@ -38,6 +39,7 @@ class UserProvider extends ChangeNotifier {
   material.ThemeMode get themeMode => _themeMode;
   bool get notificationsEnabled => _notificationsEnabled;
   bool get onboardingComplete => _onboardingComplete;
+  bool get isPinSet => _isPinSet; // Check if PIN is set
   String? get pairedDeviceId => _pairedDeviceId;
   String? get pairedDeviceName => _pairedDeviceName;
   bool get hasDevicePaired => _pairedDeviceId != null;
@@ -73,6 +75,9 @@ class UserProvider extends ChangeNotifier {
       // Load paired device
       _pairedDeviceId = _storageService.getPairedDeviceId();
       _pairedDeviceName = _storageService.getPairedDeviceName();
+
+      // Load PIN status
+      _isPinSet = _storageService.isPinSet();
 
     } catch (e) {
       debugPrint('Error loading user data: $e');

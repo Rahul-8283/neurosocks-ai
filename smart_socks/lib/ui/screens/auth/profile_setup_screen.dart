@@ -135,7 +135,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     await userProvider.setOnboardingComplete(true);
 
     if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/dashboard');
+      // Navigate to login screen to set PIN
+      Navigator.of(context).pushReplacementNamed('/login');
     }
   }
 

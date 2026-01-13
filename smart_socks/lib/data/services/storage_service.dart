@@ -27,6 +27,7 @@ class StorageService {
   static const String _keyNotificationsEnabled = 'notifications_enabled';
   static const String _keyDeviceId = 'paired_device_id';
   static const String _keyDeviceName = 'paired_device_name';
+  static const String _keyUserPin = 'user_pin'; // PIN for app security
 
   // Hive boxes
   late Box<Map> _readingsBoxInstance;
@@ -348,6 +349,28 @@ class StorageService {
   /// Get paired device name
   String? getPairedDeviceName() {
     return _prefs?.getString(_keyDeviceName);
+  }
+
+  // ============== PIN Management ==============
+
+  /// Save user PIN to persistent storage
+  Future<void> savePIN(String pin) async {
+    await _prefs?.setString(_keyUserPin, pin);
+  }
+
+  /// Get stored PIN (returns null if not set)
+  String? getPIN() {
+    return _prefs?.getString(_keyUserPin);
+  }
+
+  /// Check if PIN exists
+  bool isPinSet() {
+    return _prefs?.containsKey(_keyUserPin) ?? false;
+  }
+
+  /// Clear PIN (reset authentication)
+  Future<void> clearPIN() async {
+    await _prefs?.remove(_keyUserPin);
   }
 
   // ============== Storage Management ==============

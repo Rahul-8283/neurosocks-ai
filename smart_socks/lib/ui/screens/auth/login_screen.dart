@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../data/services/storage_service.dart';
 import '../../../providers/user_provider.dart';
 
 /// Simple PIN-based local authentication screen (offline - no Firebase)
@@ -22,7 +23,7 @@ class _LoginScreenState extends State<LoginScreen>
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
 
-  // Stored PIN (in real app, would be encrypted in secure storage)
+  // Stored PIN loaded from persistent storage
   String? _storedPin;
 
   @override
@@ -40,6 +41,17 @@ class _LoginScreenState extends State<LoginScreen>
           _shakeController.reverse();
         }
       });
+
+    // Load PIN from persistent storage
+    _loadStoredPin();
+  }
+
+  /// Load PIN from SharedPreferences
+  void _loadStoredPin() {
+    final pin = StorageService().getPIN();
+    setState(() {
+      _storedPin = pin;
+    });
   }
 
   @override
@@ -82,15 +94,22 @@ class _LoginScreenState extends State<LoginScreen>
 
     final enteredPin = _enteredPin.join();
     
-    // For demo: If no PIN is stored, accept any PIN (first time setup)
-    // In production, PIN would be stored securely
-    if (_storedPin == null || _storedPin == enteredPin) {
-      _storedPin = enteredPin; // Store for future verification
+    // If no PIN is stored, this is first-time setup - save the PIN
+    if (_storedPin == null) {
+      await StorageService().savePIN(enteredPin);
+      _storedPin = enteredPin;
+      HapticFeedback.mediumImpact();
+      if (mounted) {
+        _navigateToNextScreen();
+      }
+    } else if (_storedPin == enteredPin) {
+      // PIN matches - authentication successful
       HapticFeedback.mediumImpact();
       if (mounted) {
         _navigateToNextScreen();
       }
     } else {
+      // PIN doesn't match - show error
       _showError();
     }
 
@@ -157,8 +176,10 @@ class _LoginScreenState extends State<LoginScreen>
             child: const Text(AppStrings.cancel),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
+              // Clear PIN from storage
+              await StorageService().clearPIN();
               setState(() {
                 _storedPin = null;
                 _enteredPin.clear();
@@ -507,8 +528,8 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
 
   Future<void> _verifyAndSave() async {
     if (_pin.join() == _confirmPin.join()) {
-      // PINs match - save and continue
-      // In real app, would store PIN securely
+      // PINs match - save to persistent storage
+      await StorageService().savePIN(_pin.join());
       if (mounted) {
         Navigator.of(context).pop(true);
       }

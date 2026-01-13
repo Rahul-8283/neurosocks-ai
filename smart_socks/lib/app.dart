@@ -7,6 +7,7 @@ import 'providers/sensor_provider.dart';
 import 'providers/risk_provider.dart';
 import 'providers/user_provider.dart';
 import 'ui/screens/auth/welcome_screen.dart';
+import 'ui/screens/auth/choice_screen.dart';
 import 'ui/screens/auth/login_screen.dart';
 import 'ui/screens/auth/profile_setup_screen.dart';
 import 'ui/screens/home/dashboard_screen.dart';
@@ -51,6 +52,7 @@ class SmartSocksApp extends StatelessWidget {
             // Named routes
             routes: {
               '/welcome': (context) => const WelcomeScreen(),
+              '/choice': (context) => const ChoiceScreen(),
               '/login': (context) => const LoginScreen(),
               '/profile-setup': (context) => const ProfileSetupScreen(),
               '/dashboard': (context) => const DashboardScreen(),
@@ -78,18 +80,23 @@ class SmartSocksApp extends StatelessWidget {
       return '/welcome';
     }
     
-    // If logged in and onboarding complete, go to dashboard
-    if (userProvider.isLoggedIn && userProvider.onboardingComplete) {
-      return '/dashboard';
+    // If not logged in (no user profile), show welcome screen (onboarding)
+    if (!userProvider.isLoggedIn) {
+      return '/welcome';
     }
     
     // If logged in but profile incomplete, go to profile setup
-    if (userProvider.isLoggedIn && !userProvider.onboardingComplete) {
+    if (!userProvider.onboardingComplete) {
       return '/profile-setup';
     }
     
-    // Otherwise, show welcome screen
-    return '/welcome';
+    // If logged in and profile complete but no PIN set, go to login screen (PIN setup)
+    if (!userProvider.isPinSet) {
+      return '/login';
+    }
+    
+    // If logged in, profile complete, and PIN set, go to dashboard
+    return '/dashboard';
   }
 
   /// Map user_profile ThemeMode to Flutter ThemeMode

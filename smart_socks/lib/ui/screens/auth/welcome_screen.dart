@@ -53,7 +53,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _navigateToSetup() {
-    Navigator.of(context).pushReplacementNamed('/profile-setup');
+    Navigator.of(context).pushReplacementNamed('/choice');
   }
 
   @override
