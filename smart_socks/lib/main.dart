@@ -4,7 +4,6 @@ import 'data/services/storage_service.dart';
 import 'app.dart';
 
 /// Main entry point for Smart Socks application
-// yet to resolve the authentication errors
 
 void main() async {
   // Ensure Flutter bindings are initialized
