@@ -1,6 +1,6 @@
 // Real BLE Service using flutter_blue_plus
 // Connects to actual smart socks hardware via Bluetooth Low Energy (SPP - Serial Port Profile)
-// ESP32 sends 16-byte packets every 2 seconds
+// ESP32 sends 17-byte packets every 2 seconds
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -413,10 +413,10 @@ class RealBleService {
       debugPrint(
           '📊 Buffer size: ${_dataBuffer.length}, new data: ${data.length} bytes');
 
-      // Process complete 16-byte packets
-      while (_dataBuffer.length >= 16) {
-        // Extract 16 bytes
-        final packet = _dataBuffer.sublist(0, 16);
+      // Process complete 17-byte packets
+      while (_dataBuffer.length >= 17) {
+        // Extract 17 bytes
+        final packet = _dataBuffer.sublist(0, 17);
 
         // Parse packet
         final reading = _parsePayload(packet);
@@ -426,7 +426,7 @@ class RealBleService {
         }
 
         // Remove processed bytes from buffer
-        _dataBuffer.removeRange(0, 16);
+        _dataBuffer.removeRange(0, 17);
       }
     } catch (e) {
       debugPrint('❌ Data reception error: $e');
@@ -435,51 +435,53 @@ class RealBleService {
 
   // ============== Payload Parsing ==============
 
-  /// Parse 16-byte ESP32 payload into SensorReading
+  /// Parse 17-byte ESP32 SensorRiskPacket into SensorReading
   SensorReading? _parsePayload(List<int> packet) {
     try {
-      if (packet.length != 16) {
+      if (packet.length != 17) {
         return null;
       }
 
-      // Parse temperatures (Bytes 0-3)
+      // Parse temperatures (Bytes 0-3) — int8 encoded: temp = 25.0 + signed_byte / 2.0
       final temperatures = <double>[];
       for (int i = 0; i < 4; i++) {
-        final tempByte = packet[i];
-        var temp = 25.0 + (tempByte - 128) / 2.0;
-        // Valid range: -10°C to 50°C. Outside means sensor error → show 0
+        final raw = packet[i];
+        final signed = raw > 127 ? raw - 256 : raw;
+        var temp = 25.0 + signed / 2.0;
         if (temp < -10.0 || temp > 50.0) temp = 0.0;
         temperatures.add(temp);
       }
 
-      // Parse pressures (Bytes 4-7)
+      // Parse pressures (Bytes 4-7) — uint8: pressure = byte * 0.3
       final pressures = <double>[];
       for (int i = 0; i < 4; i++) {
-        final pressureByte = packet[4 + i];
-        final pressure = pressureByte * 0.3;
+        final pressure = packet[4 + i] * 0.3;
         pressures.add(pressure);
       }
 
-      // Parse SpO2 (Bytes 8-9)
-      final spO2Raw = (packet[8] << 8) | packet[9];
-      var spO2 = spO2Raw / 100.0;
+      // Parse SpO2 (Byte 8) — uint8 direct %
+      var spO2 = packet[8].toDouble();
       if (spO2 > 100.0) spO2 = 100.0;
       if (spO2 < 0.0) spO2 = 0.0;
 
-      // Parse Heart Rate (Bytes 10-11)
-      var heartRate = (packet[10] << 8) | packet[11];
+      // Parse Heart Rate (Byte 9) — uint8 direct BPM
+      var heartRate = packet[9];
       if (heartRate > 250) heartRate = 250;
 
-      // Parse Step Count (Bytes 12-13)
-      final stepCount = (packet[12] << 8) | packet[13];
+      // Parse Step Count (Bytes 10-11) — uint16 big-endian
+      final stepCount = (packet[10] << 8) | packet[11];
 
-      // Parse Activity Type (Byte 14)
-      final activityType = _parseActivityType(packet[14]);
+      // Parse Risk Probability (Byte 12) — 0-100%
+      final riskProbability = packet[12].clamp(0, 100).toDouble();
 
-      // Parse Battery Level (Byte 15)
-      _batteryLevel = packet[15].clamp(0, 100);
+      // Parse Risk Level (Byte 13) — 0-3
+      final riskLevel = packet[13].clamp(0, 3);
 
-      // Create SensorReading (no accel/gyro - not transmitted by ESP32 BLE)
+      // Parse Battery Level (Byte 14)
+      _batteryLevel = packet[14].clamp(0, 100);
+
+      // Bytes 15-16: Timestamp (seconds since boot) — informational only
+
       final reading = SensorReading(
         timestamp: DateTime.now(),
         temperatures: temperatures,
@@ -488,34 +490,20 @@ class RealBleService {
         heartRate: heartRate,
         stepCount: stepCount,
         batteryLevel: _batteryLevel,
-        activityType: activityType,
+        riskProbability: riskProbability,
+        riskLevel: riskLevel,
       );
 
       debugPrint(
-          '✅ SensorReading: T=[${temperatures.map((t) => t.toStringAsFixed(1)).join(',')}]°C P=[${pressures.map((p) => p.toStringAsFixed(1)).join(',')}] kPa SpO2=$spO2 HR=$heartRate BPM STP=$stepCount ACT=$activityType BAT=$_batteryLevel%');
+          '✅ SensorReading: T=[${temperatures.map((t) => t.toStringAsFixed(1)).join(',')}]°C '
+          'P=[${pressures.map((p) => p.toStringAsFixed(1)).join(',')}] kPa '
+          'SpO2=$spO2 HR=$heartRate BPM STP=$stepCount '
+          'RISK=${riskProbability.toStringAsFixed(0)}%/$riskLevel BAT=$_batteryLevel%');
 
       return reading;
     } catch (e) {
       debugPrint('❌ Parse error: $e');
       return null;
-    }
-  }
-
-  /// Parse activity type from byte value
-  ActivityType _parseActivityType(int byte) {
-    switch (byte & 0x0F) {
-      case 0:
-        return ActivityType.resting;
-      case 1:
-        return ActivityType.sitting;
-      case 2:
-        return ActivityType.standing;
-      case 3:
-        return ActivityType.walking;
-      case 4:
-        return ActivityType.running;
-      default:
-        return ActivityType.unknown;
     }
   }
 

@@ -15,9 +15,8 @@ import '../../widgets/alert_tile.dart';
 import '../../widgets/connection_status.dart';
 import 'classic_bt_scan_screen.dart';
 
-/// Phase 5: UI Updates for ML Integration
-/// 5a: ML Status Indicator - shows model status (Loading/Ready/Failed) + latency
-/// 5b: ML-Based or Threshold-Based badge - shows which method calculated risk
+/// ESP32 Edge ML: Dashboard shows real-time sensor data and risk predictions from hardware
+/// Risk predictions computed on-device (ESP32) and transmitted via 17-byte BLE packets
 
 /// Main dashboard screen showing overview of foot health
 class DashboardScreen extends StatefulWidget {
@@ -116,10 +115,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   // Connection status bar
                   _buildConnectionStatus(sensorProvider),
                   const SizedBox(height: 16),
-
-                  // ML Status Indicator (Phase 5a)
-                  _buildMLStatusIndicator(riskProvider),
-                  const SizedBox(height: 20),
 
                   // Risk gauge section
                   _buildRiskSection(riskProvider),
@@ -275,131 +270,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           // Risk level message
           _buildRiskMessage(riskProvider.currentRiskLevel),
-          const SizedBox(height: 12),
-
-          // ML-Based or Threshold-Based Badge
-          _buildMLBadge(riskProvider),
-        ],
-      ),
-    );
-  }
-
-  /// Build ML-Based vs Threshold-Based badge (Phase 5b)
-  Widget _buildMLBadge(RiskProvider riskProvider) {
-    final isMLReady = riskProvider.isMLReady;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isMLReady
-            ? Colors.blue[50]
-            : Colors.grey[100],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isMLReady
-              ? Colors.blue[300]!
-              : Colors.grey[400]!,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isMLReady ? Icons.psychology : Icons.settings,
-            size: 14,
-            color: isMLReady ? Colors.blue[700] : Colors.grey[600],
-          ),
-          const SizedBox(width: 6),
-          Text(
-            isMLReady ? 'ML-Based' : 'Threshold-Based',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isMLReady ? Colors.blue[700] : Colors.grey[600],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build ML Status Indicator (Phase 5a)
-  Widget _buildMLStatusIndicator(RiskProvider riskProvider) {
-    final mlStatus = riskProvider.mlStatus;
-    final mlInitialized = riskProvider.mlInitialized;
-
-    // Determine status color and icon
-    Color statusColor;
-    IconData statusIcon;
-    String statusText;
-
-    if (!mlInitialized) {
-      statusColor = Colors.amber;
-      statusIcon = Icons.hourglass_empty;
-      statusText = 'ML Model Loading...';
-    } else if (riskProvider.isMLReady) {
-      statusColor = Colors.green;
-      statusIcon = Icons.check_circle;
-      statusText = 'ML Model Ready';
-    } else {
-      statusColor = Colors.red;
-      statusIcon = Icons.error;
-      statusText = 'ML Model Failed';
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: statusColor.withValues(alpha: 0.1),
-        border: Border.all(
-          color: statusColor.withValues(alpha: 0.3),
-          width: 1,
-        ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(statusIcon, color: statusColor, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  statusText,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
-                  ),
-                ),
-                if (riskProvider.mlInitialized)
-                  Text(
-                    mlStatus,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '${riskProvider.mlInitialized ? 'Ready' : 'Init...'}',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
-              ),
-            ),
-          ),
         ],
       ),
     );

@@ -35,6 +35,12 @@ class SensorReading extends Equatable {
   /// Current activity type detected from IMU
   final ActivityType activityType;
 
+  /// Risk probability from ESP32 edge ML (0-100%)
+  final double riskProbability;
+
+  /// Risk level from ESP32 edge ML (0=low, 1=moderate, 2=high, 3=critical)
+  final int riskLevel;
+
   const SensorReading({
     required this.timestamp,
     required this.temperatures,
@@ -46,6 +52,8 @@ class SensorReading extends Equatable {
     this.stepCount = 0,
     this.batteryLevel = 100,
     this.activityType = ActivityType.unknown,
+    this.riskProbability = 0.0,
+    this.riskLevel = 0,
   })  : accelerometer = accelerometer ?? const AccelerometerData(x: 0, y: 0, z: 9.8),
         gyroscope = gyroscope ?? const GyroscopeData(x: 0, y: 0, z: 0);
 
@@ -74,6 +82,8 @@ class SensorReading extends Equatable {
       activityType: ActivityType.fromString(
         json['activityType'] ?? json['activity'] ?? 'unknown',
       ),
+      riskProbability: (json['riskProbability'] ?? json['riskProb'] ?? 0.0).toDouble(),
+      riskLevel: (json['riskLevel'] ?? json['riskLvl'] ?? 0).toInt(),
     );
   }
 
@@ -90,6 +100,8 @@ class SensorReading extends Equatable {
       'stepCount': stepCount,
       'batteryLevel': batteryLevel,
       'activityType': activityType.name,
+      'riskProbability': riskProbability,
+      'riskLevel': riskLevel,
     };
   }
 
@@ -105,6 +117,8 @@ class SensorReading extends Equatable {
       'gyr': gyroscope.toList(),
       'steps': stepCount,
       'batt': batteryLevel,
+      'riskProb': riskProbability,
+      'riskLvl': riskLevel,
     };
   }
 
@@ -120,6 +134,8 @@ class SensorReading extends Equatable {
     int? stepCount,
     int? batteryLevel,
     ActivityType? activityType,
+    double? riskProbability,
+    int? riskLevel,
   }) {
     return SensorReading(
       timestamp: timestamp ?? this.timestamp,
@@ -132,6 +148,8 @@ class SensorReading extends Equatable {
       stepCount: stepCount ?? this.stepCount,
       batteryLevel: batteryLevel ?? this.batteryLevel,
       activityType: activityType ?? this.activityType,
+      riskProbability: riskProbability ?? this.riskProbability,
+      riskLevel: riskLevel ?? this.riskLevel,
     );
   }
 
@@ -213,6 +231,17 @@ class SensorReading extends Equatable {
   }
 
   /// Create an empty/default reading
+  /// Risk level name from ESP32 prediction
+  String get riskLevelName {
+    switch (riskLevel) {
+      case 0: return 'Low';
+      case 1: return 'Moderate';
+      case 2: return 'High';
+      case 3: return 'Critical';
+      default: return 'Unknown';
+    }
+  }
+
   factory SensorReading.empty() {
     return SensorReading(
       timestamp: DateTime.now(),
@@ -235,13 +264,16 @@ class SensorReading extends Equatable {
         stepCount,
         batteryLevel,
         activityType,
+        riskProbability,
+        riskLevel,
       ];
 
   @override
   String toString() {
     return 'SensorReading(timestamp: $timestamp, temps: $temperatures, '
         'pressures: $pressures, spO2: $spO2, hr: $heartRate, '
-        'steps: $stepCount, battery: $batteryLevel%)';
+        'steps: $stepCount, battery: $batteryLevel%, '
+        'riskProb: $riskProbability%, riskLevel: $riskLevel)';
   }
 }
 
