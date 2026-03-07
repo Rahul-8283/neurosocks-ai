@@ -5,9 +5,80 @@
 
 REQUIREMENT SHIFT:
     OLD: ESP32 → send raw sensor data (16 bytes) → Flutter app does ML 
-    NEW: ESP32 → read sensors → ML inference → send only RISK PREDICTION
+    NEW: ESP32 → read sensors → ML inference → send BOTH raw sensor data + PREDICTIONS
+    
+    DETAILED NEW REQUIREMENT:
+    • Send ALL raw sensor values (temperatures, pressures, SpO2, HR, steps)
+    • PLUS calculated ML predictions (risk probability, risk level)
+    • App receives everything → saves to Firebase → displays
+    • App NO LONGER does ML calculations (all on ESP32)
 
-GOAL: ESP32 becomes the "brain" - Flutter app becomes the "display"
+GOAL: ESP32 becomes the "brain" - Flutter app becomes the "smart display + storage"
+
+================================================================================
+PART 1: LANGUAGE & TECHNOLOGY CHOICES
+================================================================================
+
+COMPLETE DATA FLOW (NEW ARCHITECTURE):
+───────────────────────────────────────
+    
+    ESP32 SENDS (17-byte packet every 2 seconds):
+    ┌────────────────────────────────────────────────────┐
+    │ RAW SENSOR DATA (Bytes 0-11):                      │
+    │  • 4 temperatures (encoded as int8)                │
+    │  • 4 pressures (encoded as uint8)                  │
+    │  • SpO2 (uint8)                                    │
+    │  • Heart Rate (uint8)                             │
+    │  • Step Count (uint16)                            │
+    └────────────────────────────────────────────────────┘
+    │
+    │  ML PREDICTIONS (Bytes 12-16):                     │
+    │  • Risk Probability 0-100 (uint8)                 │
+    │  • Risk Level 0-3 (uint8)                         │
+    │  • Battery Level 0-100 (uint8)                    │
+    │  • Timestamp (uint16)                             │
+    └────────────────────────────────────────────────────┘
+                         ↓
+        [Bluetooth Low Energy (SPP)]
+                         ↓
+    FLUTTER APP RECEIVES:
+    ┌────────────────────────────────────────────────────┐
+    │ RealBleService._parsePayload():                    │
+    │  1. Decode temperature array [4]                  │
+    │  2. Decode pressure array [4]                     │
+    │  3. Extract SpO2, HR, Steps                       │
+    │  4. Extract riskProbability, riskLevel            │
+    │  5. Create SensorReading object                   │
+    └────────────────────────────────────────────────────┘
+                         ↓
+    ┌────────────────────────────────────────────────────┐
+    │ SensorProvider:                                    │
+    │  • Notify listeners (UI updates)                  │
+    │  • Save to local Hive storage                     │
+    │  • Send to Firebase (background)                  │
+    └────────────────────────────────────────────────────┘
+                         ↓
+    ┌────────────────────────────────────────────────────┐
+    │ Dashboard & UI Screens:                            │
+    │  • Display all 4 temps + 4 pressures              │
+    │  • Show SpO2, HR, Steps                           │
+    │  • Display Risk Gauge (from riskProbability)      │
+    │  • Show alerts (based on riskLevel)               │
+    └────────────────────────────────────────────────────┘
+                         ↓
+    ┌────────────────────────────────────────────────────┐
+    │ Firestore:                                         │
+    │  • Store complete SensorReading (raw + prediction)│
+    │  • Enable historical analysis                     │
+    │  • Sync across devices                            │
+    └────────────────────────────────────────────────────┘
+
+KEY ADVANTAGES:
+    ✓ App receives BOTH sensor data AND predictions
+    ✓ No ML computation on app (already done on ESP32)
+    ✓ Rich data for display & analysis
+    ✓ Backward compatible packet format (first 11 bytes same as old 16-byte)
+    ✓ Firebase has complete picture for retrospective analysis
 
 ================================================================================
 PART 1: LANGUAGE & TECHNOLOGY CHOICES
@@ -51,7 +122,7 @@ ESP32 EXECUTION FLOW:
 ├─────────────────────────────────────────────────────────┤
 │  • Initialize sensors (MPU6050, MAX30102, NTC, ADC)     │
 │  • Load TFLite model from PROGMEM (flash memory)        │
-│  • Initialize interpreter + allocate tensors           │
+│  • Initialize interpreter + allocate tensors            │
 │  • Initialize BluetoothSerial                           │
 └─────────────────────────────────────────────────────────┘
                          ↓
@@ -59,67 +130,83 @@ ESP32 EXECUTION FLOW:
 │ 2. DATA COLLECTION LOOP (every 2 seconds)               │
 ├─────────────────────────────────────────────────────────┤
 │  • Read raw sensor values:                              │
-│    - Temperature: Thermistor (GPIO36)                  │
-│    - Pressure (4 zones): ADC pins GPIO 32,33,34,35    │
-│    - SpO2/HR: MAX30102 via I2C                         │
-│    - Accel/Gyro: MPU6050 via I2C                       │
-│    - Steps: Detect from accelerometer peaks            │
+│    - Temperature: Thermistor (GPIO36)                   │
+│    - Pressure (4 zones): ADC pins GPIO 32,33,34,35      │
+│    - SpO2/HR: MAX30102 via I2C                          │
+│    - Accel/Gyro: MPU6050 via I2C                        │
+│    - Steps: Detect from accelerometer peaks             │
 └─────────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────┐
 │ 3. FEATURE ENGINEERING                                  │
 ├─────────────────────────────────────────────────────────┤
 │  Create 15-feature vector:                              │
-│                                                          │
+│                                                         │
 │  Raw Features (11):                                     │
-│    [0-3]:   Temperatures (heel, ball, arch, toe)       │
-│    [4-7]:   Pressures (heel, ball, arch, toe)          │
+│    [0-3]:   Temperatures (heel, ball, arch, toe)        │
+│    [4-7]:   Pressures (heel, ball, arch, toe)           │
 │    [8]:     SpO2                                        │
-│    [9]:     Heart Rate                                 │
-│    [10]:    Step Count                                 │
-│                                                          │
+│    [9]:     Heart Rate                                  │
+│    [10]:    Step Count                                  │
+│                                                         │
 │  Engineered Features (4):                               │
-│    [11]:    max_pressure = max(pressure array)         │
-│    [12]:    pressure_variance = var(pressure array)    │
-│    [13]:    max_temp = max(temp array)                 │
-│    [14]:    temp_variance = var(temp array)            │
-│                                                          │
-│  Then NORMALIZE using saved scaler values              │
-│  (multiply by scale, subtract offset)                  │
+│    [11]:    max_pressure = max(pressure array)          │
+│    [12]:    pressure_variance = var(pressure array)     │
+│    [13]:    max_temp = max(temp array)                  │
+│    [14]:    temp_variance = var(temp array)             │
+│                                                         │
+│  Then NORMALIZE using saved scaler values               │
+│  (multiply by scale, subtract offset)                   │
 └─────────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────┐
 │ 4. ML INFERENCE (TFLite)                                │
 ├─────────────────────────────────────────────────────────┤
-│  • Load 15 features into input tensor [1×15]          │
-│  • Run interpreter.invoke()                            │
-│  • Extract output: probability (0-1)                   │
-│  • Convert to risk level:                              │
-│    - < 0.3: LOW_RISK                                   │
-│    - 0.3-0.6: MODERATE_RISK                            │
-│    - > 0.6: HIGH_RISK                                  │
+│  • Load 15 features into input tensor [1×15]            │
+│  • Run interpreter.invoke()                             │
+│  • Extract output: probability (0-1)                    │
+│  • Convert to risk level:                               │
+│    - < 0.3: LOW_RISK                                    │
+│    - 0.3-0.6: MODERATE_RISK                             │
+│    - > 0.6: HIGH_RISK                                   │
 └─────────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────┐
-│ 5. PREPARE BLUETOOTH PACKET                             │
+│ 5. PREPARE BLUETOOTH PACKET (COMPREHENSIVE)              │
 ├─────────────────────────────────────────────────────────┤
-│  NEW format (not 16-byte raw data anymore):            │
+│  Send everything the App needs to display + store:      │
 │                                                          │
-│  Byte 0:     Risk Probability (0-100 integer)         │
-│  Byte 1:     Risk Level (0=LOW, 1=MOD, 2=HIGH)        │
-│  Byte 2-3:   Heart Rate (uint16)                      │
-│  Byte 4:     Battery Level (0-100)                    │
-│  Byte 5-6:   Timestamp (relative seconds)             │
-│  Byte 7:     Reserved                                 │
+│  SENSOR DATA (Raw Values):                              │
+│  Byte 0:     Temp Heel (int8: offset by 25, multiply 2) │
+│  Byte 1:     Temp Ball (int8: offset by 25, multiply 2) │
+│  Byte 2:     Temp Arch (int8: offset by 25, multiply 2) │
+│  Byte 3:     Temp Toe (int8: offset by 25, multiply 2)  │
+│  Byte 4:     Pressure Heel (uint8: pressure/0.3)        │
+│  Byte 5:     Pressure Ball (uint8: pressure/0.3)        │
+│  Byte 6:     Pressure Arch (uint8: pressure/0.3)        │
+│  Byte 7:     Pressure Toe (uint8: pressure/0.3)         │
+│  Byte 8:     SpO2 (uint8: direct %)                     │
+│  Byte 9:     Heart Rate (uint8: direct bpm)             │
+│  Byte 10-11: Step Count (uint16 big-endian)             │
 │                                                          │
-│  (Total: 8 bytes instead of 16 + inference results)   │
+│  ML PREDICTIONS (Calculated):                           │
+│  Byte 12:    Risk Probability (uint8: 0-100)            │
+│  Byte 13:    Risk Level (uint8: 0=LOW, 1=MOD, 2=HIGH)   │
+│  Byte 14:    Battery Level (uint8: 0-100%)              │
+│  Byte 15-16: Timestamp (uint16: relative seconds)       │
+│                                                          │
+│  TOTAL: 17 bytes per packet                             │
+│  Frequency: Every 2 seconds (as before)                │
+│                                                          │
+│  *** IMPORTANT: Keep byte-for-byte format consistent *** │
+│  *** App will parse same positions every time         *** │
 └─────────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────┐
 │ 6. SEND VIA BLUETOOTH                                   │
 ├─────────────────────────────────────────────────────────┤
-│  SerialBT.write(payload, 8);  // Send to Flutter app  │
-│                                                          │
+│  SerialBT.write(payload, 8);  // Send to Flutter app    │
+│                                                         │
 │  Flutter receives → confirms receipt → displays ✓      │
 └─────────────────────────────────────────────────────────┘
 
@@ -209,26 +296,54 @@ STEP 5: IMPLEMENT TFLITE INFERENCE ENGINE
 
 STEP 6: MODIFY BLUETOOTH PACKET STRUCTURE
 ───────────────────────────────────────────
-    Replace old 16-byte raw data packet with:
+    Replace old 16-byte raw data packet with NEW 17-byte comprehensive packet:
     
-    struct RiskPacket {
-        uint8_t riskProbability;    // 0-100 (0 = no risk, 100 = high risk)
-        uint8_t riskLevel;          // 0=LOW, 1=MODERATE, 2=HIGH, 3=CRITICAL
-        uint16_t heartRate;         // For context
-        uint8_t batteryLevel;       // 0-100%
-        uint32_t timestamp;         // ms since boot
-        uint8_t padding;            // For alignment
-    } = 8 bytes total
+    struct SensorRiskPacket {
+        // Raw Sensor Data (Bytes 0-11)
+        int8_t tempHeel;           // Temp encoded: (temp-25)*2
+        int8_t tempBall;           // Encoding matches your original format
+        int8_t tempArch;           // Easy for app to decode
+        int8_t tempToe;
+        uint8_t pressHeel;         // Pressure: pressure/0.3
+        uint8_t pressBall;         // All using same encoding as 16-byte format
+        uint8_t pressArch;
+        uint8_t pressToe;
+        uint8_t spo2;              // Direct %
+        uint8_t heartRate;         // Direct bpm
+        uint16_t stepCount;        // Big-endian (high byte first)
+        
+        // ML Predictions (Bytes 12-16)
+        uint8_t riskProbability;   // 0-100 (0% to 100%)
+        uint8_t riskLevel;         // 0=LOW, 1=MODERATE, 2=HIGH, 3=CRITICAL
+        uint8_t batteryLevel;      // 0-100%
+        uint16_t timestamp;        // Relative ms since boot (or seconds)
+    } = 17 bytes total
     
     Send function:
-        void sendRiskUpdate(float probability) {
-            RiskPacket pkt;
+        void sendComprehensiveUpdate() {
+            SensorRiskPacket pkt;
+            
+            // Fill raw sensor data
+            pkt.tempHeel = (getCurrentTempHeel() - 25) * 2;
+            pkt.tempBall = (getCurrentTempBall() - 25) * 2;
+            // ... fill others similarly ...
+            
+            // Fill ML predictions
+            float probability = runMLInference(features);
             pkt.riskProbability = (uint8_t)(probability * 100);
-            pkt.riskLevel = determineLevelFrom(probability);
-            pkt.heartRate = getCurrentHR();
-            pkt.batteryLevel = 85;  // or actual reading
+            pkt.riskLevel = determineLevelFrom(probability);  // 0-3
+            pkt.batteryLevel = 85;
+            pkt.timestamp = millis() / 1000;
+            
+            // Send to Bluetooth
             SerialBT.write((uint8_t*)&pkt, sizeof(pkt));
         }
+    
+    CRITICAL NOTES:
+    ✓ This packet is SUPER compatible with your Flutter app
+    ✓ App receives same sensor FORMAT as before (16 bytes) + 1 byte prediction
+    ✓ No changes to decoder for temperature/pressure (reuse old formulas)
+    ✓ Just read 5 extra bytes at end for risk data
 
 STEP 7: OPTIMIZE & TEST
 ────────────────────────
@@ -343,47 +458,149 @@ PERFORMANCE DEBUGGING:
     ☐ Verify 2-second cycle timing
 
 ================================================================================
-PART 7: FLUTTER APP CHANGES (Update)
+PART 7: FLUTTER APP CHANGES (RECEIVE & DISPLAY)
 ================================================================================
 
-RECEIVING NEW PACKET FORMAT:
-    OLD: _parsePayload() decoding 16-byte raw sensor data
-    NEW: Parse 8-byte risk packet instead
+RECEIVING NEW PACKET FORMAT (17 bytes):
+    OLD: _parsePayload() decoded 16 bytes of raw sensor data only
+    NEW: Parse 17-byte packet with BOTH raw sensors + predictions
     
-    Changes needed:
+    Key changes:
         1. Modify RealBleService._parsePayload()
-        2. New parsing logic for RiskPacket structure
-        3. Simplified data extraction (no more feature engineering on app)
-        4. Update SensorReading model (only risk + context data)
-        5. Remove ML inference code from Flutter (no longer needed!)
+           - Read Byte 0-10: Raw sensor data (temperatures, pressures, SpO2, HR, steps)
+           - Read Byte 11-16: ML predictions (risk probability, level, battery, timestamp)
+        
+        2. Update SensorReading model
+           - KEEP existing fields: temperatures[], pressures[], spo2, heartRate, stepCount
+           - ADD new fields: riskProbability (0-100), riskLevel (enum), timestamp
+           - Remove: battery (now comes from BLE packet directly)
+        
+        3. RiskProvider simplification
+           - REMOVE: ML inference logic (was in risk_calculator.dart)
+           - REMOVE: All TFLite model loading (was in ml_risk_predictor.dart)
+           - ADD: Parse riskProbability directly from BLE packet
+           - ADD: Use riskLevel directly from BLE packet
+           - CREATE: RiskScore from BLE values (no calculation needed)
+        
+        4. Firebase storage
+           - SAME as before: Store SensorReading document per reading
+           - NEW data: Include riskProbability + riskLevel in Firestore
+           - BENEFIT: Preserve full history for trend analysis
+        
+        5. UI Display (NO CHANGES NEEDED)
+           - Dashboard shows: Risk gauge (from BLE riskProbability)
+           - Sensor screen shows: All 4 temps, 4 pressures, SpO2, HR, steps
+           - Everything already exists in your UI!
 
-    Files to update:
-        • lib/data/services/real_ble_service.dart
-        • lib/data/models/sensor_reading.dart
-        • lib/data/services/risk_calculator.dart (simplify - just use BLE value)
-        • lib/data/services/ml_risk_predictor.dart (can delete!)
+PARSE LOGIC PSEUDOCODE:
+    void parsePayload(List<int> payload) {
+        if (payload.length < 17) return;  // Invalid packet
+        
+        // Raw sensor data (Bytes 0-10)
+        int tempHeelEncoded = payload[0];  // int8
+        int tempBallEncoded = payload[1];
+        // ... etc ...
+        uint16_t stepCount = (payload[10] << 8) | payload[11];  // Big-endian
+        
+        // ML Predictions (Bytes 12-16)
+        int riskProbability = payload[12];  // 0-100
+        int riskLevel = payload[13];        // 0-3
+        int batteryLevel = payload[14];
+        
+        // Decode temperatures using YOUR EXISTING formula
+        double tempHeel = (tempHeelEncoded / 2.0) + 25;
+        double tempBall = (tempBallEncoded / 2.0) + 25;
+        // ... etc ...
+        
+        // Create SensorReading object
+        SensorReading reading = SensorReading(
+          timestamp: DateTime.now(),
+          temperatures: [tempHeel, tempBall, tempArch, tempToe],
+          pressures: [pressHeel, pressBall, pressArch, pressToe],
+          spo2: spo2,
+          heartRate: hr,
+          stepCount: stepCount,
+          riskProbability: riskProbability,     // NEW
+          riskLevel: RiskLevel.fromInt(level), // NEW
+          batteryLevel: batteryLevel,
+        );
+        
+        // Save to Firebase (same as current flow)
+        await _firebaseService.saveSensorReading(reading);
+        
+        // Notify listeners (UI updates automatically)
+        notifyListeners();
+    }
 
-FIRESTORE CHANGES:
-    OLD: Store raw sensor readings + risk calculations
-    NEW: Store only risk predictions + HR + battery
+FILES TO UPDATE:
+    ✓ lib/data/services/real_ble_service.dart
+    ✓ lib/data/models/sensor_reading.dart
+    ✓ lib/providers/sensor_provider.dart  
+    ✓ lib/providers/risk_provider.dart (SIMPLIFY - just use BLE values)
+    ✓ lib/data/services/risk_calculator.dart (REMOVE ML calls)
     
-    Simpler document structure = faster saves
+    FILES TO DELETE:
+    ✓ lib/data/services/ml_risk_predictor.dart (NO LONGER NEEDED)
+    ✓ lib/data/services/ml_feature_engineer.dart (NO LONGER NEEDED)
+    ✓ lib/data/services/ml_model_loader.dart (NO LONGER NEEDED)
+    ✓ lib/assets/models/*.tflite (NO LONGER NEEDED)
+    ✓ lib/core/constants/ml_constants.dart (NO LONGER NEEDED)
+
+FIRESTORE DOCUMENT STRUCTURE (unchanged for Firebase):
+    readings/{readingId} = {
+        timestamp: now,
+        temperatures: [30.5, 30.2, 29.8, 29.5],
+        pressures: [50, 55, 45, 60],
+        spo2: 98,
+        heartRate: 72,
+        stepCount: 150,
+        riskProbability: 25,         // NEW - from ESP32 ML
+        riskLevel: "LOW",            // NEW - from ESP32 ML
+        batteryLevel: 85,
+        synced: true
+    }
 
 ================================================================================
 QUICK START CHECKLIST - IMMEDIATE NEXT STEPS
 ================================================================================
 
-BEFORE WRITING ANY CODE:
-    1. ☐ Extract StandardScaler mean/std from ML notebooks
-    2. ☐ Create model_data.h by converting random_forest_model.tflite
-    3. ☐ Read TensorFlow Lite Micro setup guide
-    4. ☐ Create PlatformIO project with TFLite dependency
-    5. ☐ Create config.h with scaler parameters & thresholds
-    6. ☐ Refactor Updated.ino into modular functions (sensors.h)
-    7. ☐ Implement feature_engineer.h/cpp
-    8. ☐ Implement ml_inference.h/cpp
-    9. ☐ Update bluetooth_service to send 8-byte packets
-    10. ☐ Integration testing with test vectors
+HARDWARE SIDE (ESP32):
+    Before writing any code:
+        1. ☐ Extract StandardScaler mean/std from ML notebooks
+        2. ☐ Create model_data.h by converting random_forest_model.tflite
+        3. ☐ Choose model (Random Forest 15-feature recommended)
+        4. ☐ Read TensorFlow Lite Micro setup guide
+        5. ☐ Create PlatformIO project with TFLite dependency
+        6. ☐ Create config.h with scaler parameters & thresholds
+    
+    Implementation:
+        7. ☐ Refactor Updated.ino into modular functions (sensors.h)
+        8. ☐ Implement feature_engineer.h/cpp
+        9. ☐ Implement ml_inference.h/cpp (TFLite wrapper)
+        10. ☐ Update bluetooth_service (send 17-byte comprehensive packet)
+        11. ☐ Integration testing with test vectors
+        12. ☐ Measure inference latency (should be < 50ms)
+
+FLUTTER APP SIDE:
+    Data reception & parsing:
+        13. ☐ Update RealBleService._parsePayload() (handle 17 bytes)
+        14. ☐ Add riskProbability + riskLevel to SensorReading model
+        15. ☐ Update SensorProvider to handle new packet format
+        16. ☐ Test parsing with sample 17-byte packets
+    
+    Cleanup & deletion:
+        17. ☐ Remove ML inference from risk_calculator.dart
+        18. ☐ Delete ml_risk_predictor.dart
+        19. ☐ Delete ml_feature_engineer.dart
+        20. ☐ Delete ml_model_loader.dart
+        21. ☐ Delete .tflite model files from assets
+        22. ☐ Remove ML-related constants
+    
+    Firebase & Display:
+        23. ☐ Update Firestore document with riskProbability field
+        24. ☐ Verify Dashboard displays risk from BLE (not calculated)
+        25. ☐ Test full flow: ESP32 → BLE → Flutter → Firebase
+        26. ☐ Verify historical data display still works
 
 ================================================================================
 LINKS & REFERENCES
