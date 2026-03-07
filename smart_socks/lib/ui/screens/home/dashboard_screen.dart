@@ -116,6 +116,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildConnectionStatus(sensorProvider),
                   const SizedBox(height: 16),
 
+                  // Edge ML Status Indicator
+                  _buildEdgeMLStatusIndicator(sensorProvider),
+                  const SizedBox(height: 20),
+
                   // Risk gauge section
                   _buildRiskSection(riskProvider),
                   const SizedBox(height: 24),
@@ -270,6 +274,116 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           // Risk level message
           _buildRiskMessage(riskProvider.currentRiskLevel),
+          const SizedBox(height: 12),
+
+          // Edge ML Badge
+          _buildEdgeMLBadge(riskProvider),
+        ],
+      ),
+    );
+  }
+
+  /// Edge ML badge below risk gauge
+  Widget _buildEdgeMLBadge(RiskProvider riskProvider) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.teal[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.teal[300]!),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.memory, size: 14, color: Colors.teal[700]),
+          const SizedBox(width: 6),
+          Text(
+            'Edge ML (ESP32)',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.teal[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Edge ML status indicator showing connection & prediction status
+  Widget _buildEdgeMLStatusIndicator(SensorProvider sensorProvider) {
+    final isConnected = sensorProvider.isConnected;
+
+    Color statusColor;
+    IconData statusIcon;
+    String statusText;
+    String subText;
+
+    if (isConnected) {
+      statusColor = Colors.green;
+      statusIcon = Icons.check_circle;
+      statusText = 'Edge ML Active';
+      subText = 'ESP32 sending predictions via Bluetooth';
+    } else {
+      statusColor = Colors.grey;
+      statusIcon = Icons.cloud_off;
+      statusText = 'Edge ML Offline';
+      subText = 'Connect device to receive predictions';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.1),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3), width: 1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(statusIcon, color: statusColor, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor,
+                  ),
+                ),
+                Text(
+                  subText,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.memory, size: 12, color: statusColor),
+                const SizedBox(width: 4),
+                Text(
+                  'ESP32',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
