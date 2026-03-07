@@ -445,7 +445,7 @@ uint16_t sensors_get_step_count() {
    SENSOR INITIALIZATION
    ============================================================ */
 
-void sensors_init() {
+bool sensors_init() {
     Serial.println("\n=== SENSORS INITIALIZATION ===\n");
     
     // Initialize I2C
@@ -461,6 +461,7 @@ void sensors_init() {
     mpu6050_init();
     
     Serial.println("✅ ALL SENSORS INITIALIZED\n");
+    return true;
 }
 
 /* ============================================================

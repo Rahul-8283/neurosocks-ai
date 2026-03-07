@@ -5,11 +5,11 @@
 #include "config.h"
 #include "feature_engineer.h"
 
-// TensorFlow Lite headers
-#include "tensorflow/lite/micro/all_ops_resolver.h"
-#include "tensorflow/lite/micro/micro_error_reporter.h"
-#include "tensorflow/lite/micro/micro_interpreter.h"
-#include "tensorflow/lite/schema/schema_generated.h"
+// TensorFlow Lite headers (temporarily disabled)
+// #include "tensorflow/lite/micro/all_ops_resolver.h"
+// #include "tensorflow/lite/micro/micro_error_reporter.h"
+// #include "tensorflow/lite/micro/micro_interpreter.h"
+// #include "tensorflow/lite/schema/schema_generated.h"
 
 /* ============================================================
    ML INFERENCE RESULT STRUCTURE
@@ -49,17 +49,17 @@ struct MLResult {
 
 class MLInference {
 private:
-    // TFLite components
-    tflite::MicroErrorReporter micro_error_reporter;
-    const tflite::Model* model;
-    tflite::MicroInterpreter* interpreter;
+    // TFLite components (stubs for now)
+    // tflite::MicroErrorReporter micro_error_reporter;
+    void* model;  // Placeholder
+    void* interpreter;  // Placeholder
     
     // Tensor arena (working memory for inference)
     static constexpr size_t TENSOR_ARENA_SIZE = 50 * 1024;  // 50KB
-    uint8_t tensor_arena[TENSOR_ARENA_SIZE];
+    // uint8_t tensor_arena[TENSOR_ARENA_SIZE];  // Disabled for now
     
     // TensorFlow Lite Micro resolver
-    tflite::AllOpsResolver resolver;
+    // tflite::AllOpsResolver resolver;
     
     // Model status
     bool is_loaded;

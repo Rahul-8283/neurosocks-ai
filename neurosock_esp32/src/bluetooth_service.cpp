@@ -109,7 +109,7 @@ bool BluetoothService::send_packet(const uint8_t* data, uint8_t length) {
         packets_sent++;
         
         if (DEBUG_BLUETOOTH && (packets_sent % 10 == 0)) {
-            Serial.printf("[BT] ✅ Packet #%lu sent (%u bytes)\n", 
+            Serial.printf("[BT] ✅ Packet #%u sent (%u bytes)\n", 
                           packets_sent, length);
         }
         
@@ -123,7 +123,7 @@ bool BluetoothService::send_packet(const uint8_t* data, uint8_t length) {
     }
 }
 
-bool BluetoothService::is_connected() const {
+bool BluetoothService::is_connected() {
     return SerialBT.hasClient();
 }
 
@@ -148,7 +148,7 @@ void BluetoothService::shutdown() {
         is_initialized = false;
         
         if (DEBUG_BLUETOOTH) {
-            Serial.printf("[BT] Shutdown. Total packets sent: %lu\n", packets_sent);
+            Serial.printf("[BT] Shutdown. Total packets sent: %u\n", packets_sent);
         }
     }
 }

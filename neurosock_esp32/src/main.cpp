@@ -6,6 +6,16 @@
 #include "bluetooth_service.h"
 
 /* ============================================================
+   FORWARD DECLARATIONS
+   ============================================================ */
+
+void print_cycle_summary(const SensorData& sensor_data,
+                         const MLResult& ml_result,
+                         uint32_t cycle_duration);
+
+void handle_fatal_error(const char* error_msg);
+
+/* ============================================================
    GLOBAL STATE VARIABLES
    ============================================================ */
 
@@ -70,7 +80,7 @@ void loop() {
     uint32_t current_time = millis();
     
     // Check if it's time to take a reading (every 2 seconds)
-    if (current_time - last_reading_time >= SENSOR_READ_INTERVAL_MS) {
+    if (current_time - last_reading_time >= SENSOR_CYCLE_MS) {
         uint32_t cycle_start = micros();
         
         // ========== STEP 1: READ ALL SENSORS ==========
@@ -89,15 +99,7 @@ void loop() {
         }
         
         // ========== STEP 3: RUN ML INFERENCE ==========
-        float feature_array[15];
-        features.to_array(feature_array);
-        
-        MLResult ml_result;
-        if (!ml_infer(feature_array, ml_result)) {
-            Serial.println("[LOOP] ⚠️  ML inference failed, skipping this cycle");
-            last_reading_time = current_time;
-            return;
-        }
+        MLResult ml_result = ml_infer(features);
         
         // ========== STEP 4: SEND VIA BLUETOOTH ==========
         if (!bt_send_reading(sensor_data, ml_result, battery_level)) {
@@ -118,7 +120,7 @@ void loop() {
         
         // Validate cycle timing
         if (cycle_duration > SENSOR_READ_INTERVAL_MS) {
-            Serial.printf("[LOOP] ⚠️  Cycle time exceeded: %lums > %ums\n",
+            Serial.printf("[LOOP] ⚠️  Cycle time exceeded: %ums > %ums\n",
                           cycle_duration, (uint32_t)SENSOR_READ_INTERVAL_MS);
         }
     }
@@ -140,13 +142,13 @@ void print_cycle_summary(const SensorData& sensor_data,
     Serial.printf("SpO2=%d%%, HR=%d bpm\n", (uint8_t)sensor_data.spo2, sensor_data.heart_rate);
     
     // ML prediction summary
-    Serial.printf("│ ML: Risk=%.1f%% [%s], Latency=%lums\n",
+    Serial.printf("│ ML: Risk=%.1f%% [%s], Latency=%ums\n",
                   ml_result.get_risk_percent() * 1.0f,
                   ml_result.get_risk_name(),
                   ml_result.latency_ms);
     
     // Performance metrics
-    Serial.printf("│ PERF: Cycle time=%lums, Total readings=%lu, BT connected=%s\n",
+    Serial.printf("│ PERF: Cycle time=%ums, Total readings=%u, BT connected=%s\n",
                   cycle_duration, reading_count,
                   bt_is_connected() ? "✅" : "❌");
     
@@ -161,9 +163,6 @@ void handle_fatal_error(const char* error_msg) {
     Serial.printf("\n❌ FATAL ERROR: %s\n", error_msg);
     Serial.println("System halting...");
     while (1) {
-        digitalWrite(LED_BUILTIN, HIGH);
-        delay(200);
-        digitalWrite(LED_BUILTIN, LOW);
-        delay(200);
+        delay(1000);
     }
 }

@@ -40,8 +40,9 @@ struct SensorData {
 /**
  * Initialize all sensors: I2C bus, MAX30102, MPU6050, ADC
  * Must be called in setup()
+ * Returns: true if successful, false if error
  */
-void sensors_init();
+bool sensors_init();
 
 /* ============================================================
    SENSOR READING FUNCTIONS

@@ -30,8 +30,9 @@
 #define BLUETOOTH_BAUD    115200
 
 // Timing
-#define SENSOR_CYCLE_MS   2000    // Collect sensors every 2 seconds
-#define HAS_TEMP_SENSORS  true    // Enable temperature sensor
+#define SENSOR_CYCLE_MS        2000    // Collect sensors every 2 seconds
+#define SENSOR_READ_INTERVAL_MS 2000   // Alias for compatibility
+#define HAS_TEMP_SENSORS       true    // Enable temperature sensor
 
 /* ============================================================
    NTC THERMISTOR CONFIGURATION

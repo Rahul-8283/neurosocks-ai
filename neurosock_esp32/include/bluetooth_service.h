@@ -143,7 +143,7 @@ public:
     /**
      * Check if Bluetooth is connected
      */
-    bool is_connected() const;
+    bool is_connected();
     
     /**
      * Get number of packets sent since startup
