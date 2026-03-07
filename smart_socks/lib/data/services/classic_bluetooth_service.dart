@@ -1,6 +1,6 @@
 // Classic Bluetooth (SPP) Service for ESP32 BluetoothSerial
 // Uses native Android platform channel — NO third-party package needed.
-// The ESP32 sends 16-byte binary packets every 2 seconds via BluetoothSerial.
+// The ESP32 sends 17-byte binary packets every 2 seconds via BluetoothSerial.
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -43,7 +43,7 @@ class ClassicBluetoothService {
   String _deviceName = '';
   int _batteryLevel = 0;
 
-  // Buffer for assembling 16-byte packets
+  // Buffer for assembling 17-byte packets
   final List<int> _buffer = [];
 
   // ============== Getters ==============
@@ -251,7 +251,7 @@ class ClassicBluetoothService {
 
   // ============== Data Listening ==============
 
-  /// Start listening for 16-byte sensor packets from ESP32.
+  /// Start listening for 17-byte sensor packets from ESP32.
   /// Raw bytes arrive via EventChannel, get buffered and parsed here.
   Future<void> startListening() async {
     if (!_isConnected) {
@@ -295,7 +295,7 @@ class ClassicBluetoothService {
 
   // ============== Data Processing ==============
 
-  /// Accumulate bytes and parse complete 16-byte packets
+  /// Accumulate bytes and parse complete 17-byte packets
   void _onDataReceived(List<int> data) {
     _buffer.addAll(data);
 
@@ -304,10 +304,10 @@ class ClassicBluetoothService {
       'raw: ${data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}',
     );
 
-    // Process all complete 16-byte packets
-    while (_buffer.length >= 16) {
-      final packet = _buffer.sublist(0, 16);
-      _buffer.removeRange(0, 16);
+    // Process all complete 17-byte packets
+    while (_buffer.length >= 17) {
+      final packet = _buffer.sublist(0, 17);
+      _buffer.removeRange(0, 17);
 
       final reading = _parsePayload(packet);
       if (reading != null) {
@@ -317,40 +317,45 @@ class ClassicBluetoothService {
     }
   }
 
-  // ============== 16-Byte Payload Parsing ==============
+  // ============== 17-Byte Payload Parsing ==============
   //
-  // ESP32 payload layout (matches the Arduino code exactly):
+  // ESP32 SensorRiskPacket layout (matches bluetooth_service.h):
   //
   // Byte  0-3  : Temperature zones (Heel, Ball, Arch, Toe)
-  //              Encoding: byte = (temp - 25.0) * 2.0 + 128
-  //              Decoding: temp = 25.0 + (byte - 128) / 2.0
+  //              Encoding: int8 = (temp - 25.0) * 2
+  //              Decoding: temp = 25.0 + signed_byte / 2.0
   //
   // Byte  4-7  : Pressure zones (Heel, Ball, Arch, Toe)
-  //              Encoding: byte = pressure / 0.3
+  //              Encoding: uint8 = pressure / 0.3
   //              Decoding: pressure = byte * 0.3
   //
-  // Byte  8-9  : SpO2 (uint16 big-endian, value = realSpO2 * 100)
-  //              Decoding: spO2 = ((byte8 << 8) | byte9) / 100.0
+  // Byte  8    : SpO2 (uint8, direct %)
   //
-  // Byte 10-11 : Heart Rate (uint16 big-endian, BPM)
+  // Byte  9    : Heart Rate (uint8, BPM)
   //
-  // Byte 12-13 : Step Count (uint16 big-endian)
+  // Byte 10-11 : Step Count (uint16 big-endian)
   //
-  // Byte 14    : Activity Type (0=rest, 1=sit, 2=stand, 3=walk, 4=run)
+  // Byte 12    : Risk Probability (uint8, 0-100%)
   //
-  // Byte 15    : Battery Level (0-100 %)
+  // Byte 13    : Risk Level (uint8, 0=low, 1=moderate, 2=high, 3=critical)
+  //
+  // Byte 14    : Battery Level (0-100%)
+  //
+  // Byte 15-16 : Timestamp (uint16 big-endian, seconds since boot)
 
   SensorReading? _parsePayload(List<int> packet) {
     try {
-      if (packet.length != 16) return null;
+      if (packet.length != 17) return null;
 
       // ---- Temperatures (Bytes 0-3) ----
-      // Encoding: byte = (temp - 25.0) * 2.0 + 128
-      // When no sensors: sends 0.0°C → byte = 78 → decodes back to 0.0°C
+      // Encoding: int8 = (temp - 25.0) * 2
+      // Decoding: temp = 25.0 + signed_byte / 2.0
       final temperatures = <double>[];
       for (int i = 0; i < 4; i++) {
         final raw = packet[i];
-        var temp = 25.0 + (raw - 128) / 2.0;
+        // Convert uint8 to signed int8
+        final signed = raw > 127 ? raw - 256 : raw;
+        var temp = 25.0 + signed / 2.0;
         // Valid range: -10°C to 50°C. Outside means sensor error → show 0
         if (temp < -10.0 || temp > 50.0) temp = 0.0;
         temperatures.add(temp);
@@ -366,42 +371,36 @@ class ClassicBluetoothService {
       }
       _log('📊 Pressures: ${pressures.map((p) => p.toStringAsFixed(1)).join(', ')} kPa');
 
-      // ---- SpO2 (Bytes 8-9) ----
-      final spO2Raw = (packet[8] << 8) | packet[9];
-      double spO2 = spO2Raw / 100.0;
-      // VALIDATION: Real SpO2 signals have fingerprints and varies slightly with heartbeat
-      // False positives (plastic, finger off) often show 85-90% steady
-      // Additional check: if heart rate is 0 or very low, SpO2 is not trustworthy
+      // ---- SpO2 (Byte 8) ----
+      double spO2 = packet[8].toDouble();
       if (spO2 > 100.0) spO2 = 100.0;
       if (spO2 < 0.0) spO2 = 0.0;
-      
-      _log('❤️  SpO2: $spO2Raw raw → ${spO2.toStringAsFixed(1)}%' + 
-           (spO2 > 0 && spO2 < 95 ? ' [WATCH - may be plastic]' : ''));
+      _log('❤️  SpO2: ${spO2.toStringAsFixed(1)}%');
 
-      // ---- Heart Rate (Bytes 10-11) ----
-      int heartRate = (packet[10] << 8) | packet[11];
+      // ---- Heart Rate (Byte 9) ----
+      int heartRate = packet[9];
       if (heartRate > 250) heartRate = 250;
-      if (heartRate < 0) heartRate = 0;
-      
-      // Note: If no heartbeat detected but SpO2 reading exists, still show it
-      // Sensor may still be warming up or finger placement not optimal
-      // User can still see the reading and adjust placement
-      
       _log('💓 HR: $heartRate BPM');
 
-      // ---- Step Count (Bytes 12-13) ----
-      final stepCount = (packet[12] << 8) | packet[13];
+      // ---- Step Count (Bytes 10-11) ----
+      final stepCount = (packet[10] << 8) | packet[11];
       _log('👟 Steps: $stepCount');
 
-      // ---- Activity Type (Byte 14) ----
-      // Values: 0=rest, 1=sit, 2=stand, 3=walk, 4=run
-      final activityType = _parseActivityType(packet[14]);
-      _log('🚶 Activity: ${activityType.displayName}');
+      // ---- Risk Probability (Byte 12) ----
+      final riskProbability = packet[12].clamp(0, 100).toDouble();
+      _log('🧠 Risk Prob: $riskProbability%');
 
-      // ---- Battery Level (Byte 15) ----
-      _batteryLevel = packet[15].clamp(0, 100);
+      // ---- Risk Level (Byte 13) ----
+      final riskLevel = packet[13].clamp(0, 3);
+      _log('⚠️ Risk Level: $riskLevel');
 
-      // IMU data not transmitted by ESP32 BLE - uses defaults
+      // ---- Battery Level (Byte 14) ----
+      _batteryLevel = packet[14].clamp(0, 100);
+
+      // ---- Timestamp (Bytes 15-16) ----
+      // Seconds since device boot — informational only
+      // final deviceTimestamp = (packet[15] << 8) | packet[16];
+
       final reading = SensorReading(
         timestamp: DateTime.now(),
         temperatures: temperatures,
@@ -410,37 +409,21 @@ class ClassicBluetoothService {
         heartRate: heartRate,
         stepCount: stepCount,
         batteryLevel: _batteryLevel,
-        activityType: activityType,
+        riskProbability: riskProbability,
+        riskLevel: riskLevel,
       );
 
       _log(
         '✅ T=[${temperatures.map((t) => t.toStringAsFixed(1)).join(',')}]°C '
         'P=[${pressures.map((p) => p.toStringAsFixed(1)).join(',')}]kPa '
         'SpO2=${spO2.toStringAsFixed(1)}% HR=$heartRate STP=$stepCount '
-        'ACT=$activityType BAT=$_batteryLevel%',
+        'RISK=${riskProbability.toStringAsFixed(0)}%/$riskLevel BAT=$_batteryLevel%',
       );
 
       return reading;
     } catch (e) {
       _log('❌ Parse error: $e');
       return null;
-    }
-  }
-
-  ActivityType _parseActivityType(int byte) {
-    switch (byte & 0x0F) {
-      case 0:
-        return ActivityType.resting;
-      case 1:
-        return ActivityType.sitting;
-      case 2:
-        return ActivityType.standing;
-      case 3:
-        return ActivityType.walking;
-      case 4:
-        return ActivityType.running;
-      default:
-        return ActivityType.unknown;
     }
   }
 

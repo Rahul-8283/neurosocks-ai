@@ -15,9 +15,8 @@ import '../../widgets/alert_tile.dart';
 import '../../widgets/connection_status.dart';
 import 'classic_bt_scan_screen.dart';
 
-/// Phase 5: UI Updates for ML Integration
-/// 5a: ML Status Indicator - shows model status (Loading/Ready/Failed) + latency
-/// 5b: ML-Based or Threshold-Based badge - shows which method calculated risk
+/// ESP32 Edge ML: Dashboard shows real-time sensor data and risk predictions from hardware
+/// Risk predictions computed on-device (ESP32) and transmitted via 17-byte BLE packets
 
 /// Main dashboard screen showing overview of foot health
 class DashboardScreen extends StatefulWidget {
@@ -117,8 +116,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildConnectionStatus(sensorProvider),
                   const SizedBox(height: 16),
 
-                  // ML Status Indicator (Phase 5a)
-                  _buildMLStatusIndicator(riskProvider),
+                  // Edge ML Status Indicator
+                  _buildEdgeMLStatusIndicator(sensorProvider),
                   const SizedBox(height: 20),
 
                   // Risk gauge section
@@ -277,45 +276,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildRiskMessage(riskProvider.currentRiskLevel),
           const SizedBox(height: 12),
 
-          // ML-Based or Threshold-Based Badge
-          _buildMLBadge(riskProvider),
+          // Edge ML Badge
+          _buildEdgeMLBadge(riskProvider),
         ],
       ),
     );
   }
 
-  /// Build ML-Based vs Threshold-Based badge (Phase 5b)
-  Widget _buildMLBadge(RiskProvider riskProvider) {
-    final isMLReady = riskProvider.isMLReady;
-
+  /// Edge ML badge below risk gauge
+  Widget _buildEdgeMLBadge(RiskProvider riskProvider) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: isMLReady
-            ? Colors.blue[50]
-            : Colors.grey[100],
+        color: Colors.teal[50],
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isMLReady
-              ? Colors.blue[300]!
-              : Colors.grey[400]!,
-        ),
+        border: Border.all(color: Colors.teal[300]!),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            isMLReady ? Icons.psychology : Icons.settings,
-            size: 14,
-            color: isMLReady ? Colors.blue[700] : Colors.grey[600],
-          ),
+          Icon(Icons.memory, size: 14, color: Colors.teal[700]),
           const SizedBox(width: 6),
           Text(
-            isMLReady ? 'ML-Based' : 'Threshold-Based',
+            'Edge ML (ESP32)',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: isMLReady ? Colors.blue[700] : Colors.grey[600],
+              color: Colors.teal[700],
             ),
           ),
         ],
@@ -323,28 +310,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Build ML Status Indicator (Phase 5a)
-  Widget _buildMLStatusIndicator(RiskProvider riskProvider) {
-    final mlStatus = riskProvider.mlStatus;
-    final mlInitialized = riskProvider.mlInitialized;
+  /// Edge ML status indicator showing connection & prediction status
+  Widget _buildEdgeMLStatusIndicator(SensorProvider sensorProvider) {
+    final isConnected = sensorProvider.isConnected;
 
-    // Determine status color and icon
     Color statusColor;
     IconData statusIcon;
     String statusText;
+    String subText;
 
-    if (!mlInitialized) {
-      statusColor = Colors.amber;
-      statusIcon = Icons.hourglass_empty;
-      statusText = 'ML Model Loading...';
-    } else if (riskProvider.isMLReady) {
+    if (isConnected) {
       statusColor = Colors.green;
       statusIcon = Icons.check_circle;
-      statusText = 'ML Model Ready';
+      statusText = 'Edge ML Active';
+      subText = 'ESP32 sending predictions via Bluetooth';
     } else {
-      statusColor = Colors.red;
-      statusIcon = Icons.error;
-      statusText = 'ML Model Failed';
+      statusColor = Colors.grey;
+      statusIcon = Icons.cloud_off;
+      statusText = 'Edge ML Offline';
+      subText = 'Connect device to receive predictions';
     }
 
     return Container(
@@ -352,10 +336,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: statusColor.withValues(alpha: 0.1),
-        border: Border.all(
-          color: statusColor.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3), width: 1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -374,30 +355,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: statusColor,
                   ),
                 ),
-                if (riskProvider.mlInitialized)
-                  Text(
-                    mlStatus,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[600],
-                    ),
-                  ),
+                Text(
+                  subText,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                ),
               ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey[200],
+              color: statusColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: Text(
-              '${riskProvider.mlInitialized ? 'Ready' : 'Init...'}',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.memory, size: 12, color: statusColor),
+                const SizedBox(width: 4),
+                Text(
+                  'ESP32',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

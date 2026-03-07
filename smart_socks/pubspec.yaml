@@ -82,9 +82,6 @@ dependencies:
   # Network
   connectivity_plus: ^6.1.1
 
-  # 🤖 Machine Learning - TFLite Model Inference
-  tflite_flutter: ^0.12.0
-
   # UI Enhancements
   google_fonts: ^6.2.1
   shimmer: ^3.0.0
@@ -109,8 +106,6 @@ dev_dependencies:
 flutter:
   assets:
     - .env
-    - lib/assets/models/
-    - lib/assets/pkl/
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

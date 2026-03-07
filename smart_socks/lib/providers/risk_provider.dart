@@ -1,5 +1,5 @@
 // Processes readings → risk scores, manages alerts, daily summaries
-// ✅ Phase 3: ML Integration - Uses ML predictions with threshold fallback
+// ✅ ESP32 Edge ML: Uses predictions from hardware with threshold fallback
 // ✅ Firestore: Alerts & predictions stored user-specific
 
 import 'dart:async';
@@ -27,9 +27,6 @@ class RiskProvider extends ChangeNotifier {
     
     // Load initial data
     _loadInitialData();
-    
-    // Initialize ML model asynchronously
-    _initializeML();
   }
   
   final RiskCalculator _riskCalculator = RiskCalculator();
@@ -39,10 +36,6 @@ class RiskProvider extends ChangeNotifier {
 
   // User context for Firestore
   String? _currentUserId;
-
-  // ML status tracking
-  bool _mlInitialized = false;
-  String _mlStatus = 'Initializing...';
 
   // Current state
   RiskScore? _currentRiskScore;
@@ -90,11 +83,6 @@ class RiskProvider extends ChangeNotifier {
 
   // Alert stats
   AlertStats get alertStats => _alertService.getStats();
-
-  // ML Status
-  bool get mlInitialized => _mlInitialized;
-  String get mlStatus => _mlStatus;
-  bool get isMLReady => _riskCalculator.isMLReady;
 
   // ============== User Context ==============
 
@@ -377,35 +365,6 @@ class RiskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ============== ML Initialization ==============
-
-  /// Initialize ML model asynchronously (called on startup)
-  void _initializeML() {
-    _mlStatus = 'Loading ML model...';
-    notifyListeners();
-
-    // Run ML initialization in background
-    _riskCalculator.initializeML().then((_) {
-      _mlInitialized = true;
-      _mlStatus = 'ML Ready: ${_riskCalculator.isMLReady}';
-      
-      if (kDebugMode) {
-        debugPrint('✅ RiskProvider: ML initialized successfully');
-      }
-      
-      notifyListeners();
-    }).catchError((error) {
-      _mlInitialized = false;
-      _mlStatus = 'ML Init Failed: $error';
-      
-      if (kDebugMode) {
-        debugPrint('⚠️ RiskProvider: ML init failed - $error');
-      }
-      
-      notifyListeners();
-    });
-  }
-
   // ============== Firestore Operations ==============
 
   /// Save alert to Firestore (user-specific)
@@ -438,7 +397,9 @@ class RiskProvider extends ChangeNotifier {
           'gaitRisk': riskScore.gaitRisk,
           'factors': riskScore.factors,
           'recommendations': riskScore.recommendations,
-          'mlBased': _riskCalculator.isMLReady,
+          'edgeMlBased': reading.riskProbability > 0 || reading.riskLevel > 0,
+          'edgeMlRiskProbability': reading.riskProbability,
+          'edgeMlRiskLevel': reading.riskLevel,
           'sensorSnapshot': {
             'temperatures': reading.temperatures,
             'pressures': reading.pressures,
@@ -484,7 +445,7 @@ class RiskProvider extends ChangeNotifier {
   void dispose() {
     _alertSubscription?.cancel();
     _alertService.dispose();
-    _riskCalculator.dispose();  // Cleanup ML resources
+    _riskCalculator.dispose();
     super.dispose();
   }
 }
