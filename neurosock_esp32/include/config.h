@@ -96,44 +96,44 @@
    14:    temp_variance
    ============================================================ */
 
-// Placeholder values - EXTRACT FROM ML/02_random_forest_model.ipynb
-// Print statement shows: print(f"Feature means ({len(scaler.mean_)} values):")
-// and: print(f"Feature scales/stds ({len(scaler.scale_)} values):")
+// Extracted from ML/02_random_forest_model.ipynb StandardScaler during training
+// Source: scaler.mean_ and scaler.scale_ from RF model trained on 8000 synthetic samples
+// Accuracy: 92.45% | ROC-AUC: 97.98%
 
 const float FEATURE_MEANS[ML_INPUT_FEATURES] = {
-    30.5f,  // temp_heel
-    30.2f,  // temp_ball
-    30.0f,  // temp_arch
-    29.5f,  // temp_toe
-    45.0f,  // press_heel
-    50.0f,  // press_ball
-    42.0f,  // press_arch
-    55.0f,  // press_toe
-    98.0f,  // spo2
-    70.0f,  // heart_rate
-    150.0f, // step_count
-    55.0f,  // max_pressure (engineered)
-    25.0f,  // pressure_variance (engineered)
-    30.5f,  // max_temp (engineered)
-    15.0f   // temp_variance (engineered)
+    34.377127267113607f,  // temp_heel
+    34.376776436691941f,  // temp_ball
+    34.384331094983494f,  // temp_arch
+    34.404600260634702f,  // temp_toe
+    44.134212921268379f,  // press_heel
+    43.937746057938966f,  // press_ball
+    43.832688437183343f,  // press_arch
+    44.349988690344688f,  // press_toe
+    92.488721981641774f,  // spo2
+    94.265249999999995f,  // heartRate
+    59.760500000000000f,  // stepCount
+    64.597849484194811f,  // max_pressure (engineered)
+    358.746560145869012f, // pressure_variance (engineered)
+    36.387833158608558f,  // max_temp (engineered)
+    3.330151855516803f    // temp_variance (engineered)
 };
 
 const float FEATURE_STDS[ML_INPUT_FEATURES] = {
-    1.2f,   // temp_heel
-    1.1f,   // temp_ball
-    1.3f,   // temp_arch
-    1.0f,   // temp_toe
-    8.0f,   // press_heel
-    9.0f,   // press_ball
-    7.5f,   // press_arch
-    10.0f,  // press_toe
-    2.0f,   // spo2
-    12.0f,  // heart_rate
-    400.0f, // step_count
-    15.0f,  // max_pressure (engineered)
-    40.0f,  // pressure_variance (engineered)
-    2.0f,   // max_temp (engineered)
-    8.0f    // temp_variance (engineered)
+    0.565352534871213f,   // temp_heel
+    0.560907760479280f,   // temp_ball
+    0.569056385618529f,   // temp_arch
+    0.547891185470064f,   // temp_toe
+    0.054544126291903f,   // press_heel
+    0.054640308757458f,   // press_ball
+    0.054551972382659f,   // press_arch
+    0.052693993830820f,   // press_toe
+    0.231752998642186f,   // spo2
+    0.049385116193493f,   // heartRate
+    0.029076658782992f,   // stepCount
+    0.046230085918394f,   // max_pressure (engineered)
+    0.002327744445261f,   // pressure_variance (engineered)
+    0.499504192726976f,   // max_temp (engineered)
+    0.274311583009886f    // temp_variance (engineered)
 };
 
 /* ============================================================
