@@ -1,0 +1,50 @@
+{
+    "model_name": "LSTM Recurrent Neural Network",
+    "dataset": "synthetic_foot_ulcer_dataset_RISK.csv",
+    "features": [
+        "temp_heel",
+        "temp_ball",
+        "temp_arch",
+        "temp_toe",
+        "press_heel",
+        "press_ball",
+        "press_arch",
+        "press_toe",
+        "spo2",
+        "heartRate",
+        "stepCount",
+        "max_pressure",
+        "pressure_variance",
+        "max_temp",
+        "temp_variance"
+    ],
+    "n_features": 15,
+    "sequence_length": 5,
+    "model_architecture": {
+        "input_shape": [
+            5,
+            15
+        ],
+        "layers": [
+            "LSTM(64, return_sequences=True)",
+            "Dropout(0.2)",
+            "LSTM(32, return_sequences=False)",
+            "Dropout(0.2)",
+            "Dense(16)",
+            "Dropout(0.2)",
+            "Dense(1, sigmoid)"
+        ]
+    },
+    "metrics": {
+        "accuracy": 0.6681704260651629,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "roc_auc": 0.5040410404715983
+    },
+    "training_info": {
+        "epochs_trained": 17,
+        "final_train_loss": 0.6036587953567505,
+        "final_val_loss": 0.6685675978660583
+    }
+}
