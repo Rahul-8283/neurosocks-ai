@@ -1,0 +1,9 @@
+Model,ROC_AUC,Features_Used,Scaler_Used
+SVM,0.9991926688258138,19,fallback(StandardScaler fit on current data)
+CNN,0.998186215235792,19,e:\S4\WORKING\neurosocks-ai\ML\models\cnn_scaler.pkl
+XGBoost,0.9954462040618081,15,e:\S4\WORKING\neurosocks-ai\ML\models\XG_Boost\scaler.pkl
+KNN,0.9950239272144328,15,e:\S4\WORKING\neurosocks-ai\ML\models\KNN\scaler.pkl
+Random Forest,0.9938822709495936,15,fallback(StandardScaler fit on current data)
+MLP,0.9880980990494885,15,e:\S4\WORKING\neurosocks-ai\ML\models\MLP\scaler.pkl
+Logistic Regression,0.9762725855774658,15,e:\S4\WORKING\neurosocks-ai\ML\models\LR\scaler.pkl
+LSTM,0.4840816895855432,15,e:\S4\WORKING\neurosocks-ai\ML\models\LSTM\scaler.pkl
